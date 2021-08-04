@@ -33,17 +33,31 @@ import net.runelite.client.util.QuantityFormatter;
 public class EctofuntusInfobox extends InfoBox
 {
 	private final EctofuntusInfoPlugin plugin;
+	private final EctofuntusInfoConfig config;
 
-	public EctofuntusInfobox(BufferedImage image, EctofuntusInfoPlugin plugin)
+	public EctofuntusInfobox(BufferedImage image, EctofuntusInfoPlugin plugin, EctofuntusInfoConfig config)
 	{
 		super(image, plugin);
 		this.plugin = plugin;
+		this.config = config;
 	}
 
 	@Override
 	public String getText()
 	{
-		return QuantityFormatter.formatNumber(plugin.getStoredTokens());
+		int number = plugin.getStoredTokens();
+
+		if (config.countRemaining())
+		{
+			number = EctofuntusInfoPlugin.MAX_TOKEN_AMOUNT - number;
+		}
+
+		if (config.counterType() == EctofuntusCounterType.BONEMEAL)
+		{
+			number /= EctofuntusInfoPlugin.TOKENS_PER_BONEMEAL;
+		}
+
+		return QuantityFormatter.formatNumber(number);
 	}
 
 	@Override
@@ -54,7 +68,11 @@ public class EctofuntusInfobox extends InfoBox
 		{
 			return Color.RED;
 		}
-		else if (tokens >= EctofuntusInfoPlugin.WARN_TOKEN_AMOUNT)
+		else if (tokens >= EctofuntusInfoPlugin.HIGH_WARN_TOKEN_AMOUNT)
+		{
+			return Color.ORANGE;
+		}
+		else if (tokens >= EctofuntusInfoPlugin.LOW_WARN_TOKEN_AMOUNT)
 		{
 			return Color.YELLOW;
 		}
@@ -77,9 +95,10 @@ public class EctofuntusInfobox extends InfoBox
 		}
 		else
 		{
-			sb.append("</br>You can still create ")
-				.append(QuantityFormatter.formatNumber(EctofuntusInfoPlugin.MAX_TOKEN_AMOUNT - tokens))
-				.append(" more Ecto-tokens.");
+			sb.append("</br>You can still use ")
+				.append(QuantityFormatter.formatNumber(
+					(EctofuntusInfoPlugin.MAX_TOKEN_AMOUNT - tokens) / EctofuntusInfoPlugin.TOKENS_PER_BONEMEAL))
+				.append(" more Bonemeal on the Ectofuntus.");
 		}
 
 		return sb.toString();

@@ -26,16 +26,20 @@
 package com.ectofuntusinfo;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.inject.Provides;
 import java.util.Arrays;
 import java.util.Set;
 import javax.inject.Inject;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.ItemID;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -53,8 +57,10 @@ public class EctofuntusInfoPlugin extends Plugin
 	private static final int LOWER_TOKEN_VARBIT = 4769;
 	private static final int UPPER_TOKEN_VARBIT = 5671;
 
+	public static final int TOKENS_PER_BONEMEAL = 5;
 	public static final int MAX_TOKEN_AMOUNT = 1000;
-	public static final int WARN_TOKEN_AMOUNT = MAX_TOKEN_AMOUNT - (14 * 5);
+	public static final int HIGH_WARN_TOKEN_AMOUNT = MAX_TOKEN_AMOUNT - (13 * TOKENS_PER_BONEMEAL);
+	public static final int LOW_WARN_TOKEN_AMOUNT = MAX_TOKEN_AMOUNT - (39 * TOKENS_PER_BONEMEAL);
 
 	@Inject
 	private Client client;
@@ -65,6 +71,9 @@ public class EctofuntusInfoPlugin extends Plugin
 	@Inject
 	private InfoBoxManager infoBoxManager;
 
+	@Inject
+	private EctofuntusInfoConfig config;
+
 	private EctofuntusInfobox infobox;
 
 	@Getter
@@ -72,13 +81,18 @@ public class EctofuntusInfoPlugin extends Plugin
 	@Getter
 	private int storedTokens;
 
+	@Provides
+	EctofuntusInfoConfig getConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(EctofuntusInfoConfig.class);
+	}
+
 	@Override
 	protected void startUp() throws Exception
 	{
 		inEctofuntusRegion = checkEctofuntusRegion();
 		storedTokens = 0;
-		infobox = new EctofuntusInfobox(itemManager.getImage(ItemID.ECTOTOKEN, 10, false), this);
-		infoBoxManager.addInfoBox(infobox);
+		setupInfoBox();
 	}
 
 	@Override
@@ -98,7 +112,7 @@ public class EctofuntusInfoPlugin extends Plugin
 			case LOADING:
 				inEctofuntusRegion = checkEctofuntusRegion();
 				break;
-			case LOGGED_IN:
+			case LOGIN_SCREEN:
 				inEctofuntusRegion = false;
 				storedTokens = 0;
 				break;
@@ -120,8 +134,46 @@ public class EctofuntusInfoPlugin extends Plugin
 		storedTokens = (upper * 256) + ((lower + upper) % 5) * 64 + lower;
 	}
 
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (event.getGroup().equals(EctofuntusInfoConfig.CONFIG_GROUP)
+			&& event.getKey().equals(EctofuntusInfoConfig.COUNTER_TYPE_KEY_NAME))
+		{
+			setupInfoBox();
+		}
+	}
+
 	private boolean checkEctofuntusRegion()
 	{
+		GameState gameState = client.getGameState();
+		if (gameState != GameState.LOGGED_IN
+			&& gameState != GameState.LOADING)
+		{
+			return false;
+		}
+
 		return Arrays.stream(client.getMapRegions()).anyMatch(ECTOFUNTUS_REGIONS::contains);
+	}
+
+	private void setupInfoBox()
+	{
+		int item;
+		if (config.counterType() == EctofuntusCounterType.BONEMEAL)
+		{
+			item = ItemID.BONEMEAL;
+		}
+		else
+		{
+			item = ItemID.ECTOTOKEN;
+		}
+
+		if (infobox != null)
+		{
+			infoBoxManager.removeInfoBox(infobox);
+		}
+
+		infobox = new EctofuntusInfobox(itemManager.getImage(item, 10, false), this, config);
+		infoBoxManager.addInfoBox(infobox);
 	}
 }
